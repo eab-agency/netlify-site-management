@@ -17,6 +17,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { DeleteSiteDialog } from "@/components/delete-site-dialog";
 import { DeploysDialog } from "@/components/deploys-dialog";
+import { EditSiteDialog } from "@/components/edit-site-dialog";
 import { useToast } from "@/components/ui/use-toast";
 import { formatDistanceToNow } from "date-fns";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -139,10 +140,13 @@ export default function SitesTable() {
     }
   });
 
-  // Filter sites by search term
-  const filteredSites = sortedSites.filter((site) =>
-    site.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Filter sites by search term and partner/proof requirement
+  const filteredSites = sortedSites.filter((site) => {
+    const siteName = site.name.toLowerCase();
+    const searchMatch = siteName.includes(searchTerm.toLowerCase());
+    const isPartnerOrProof = siteName.includes('partner') || siteName.includes('proof');
+    return searchMatch && isPartnerOrProof;
+  });
 
   // Paginate sites
   const paginatedSites = filteredSites.slice(
@@ -430,6 +434,12 @@ export default function SitesTable() {
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
+                      <EditSiteDialog
+                        siteId={site.id}
+                        siteName={site.name}
+                        onUpdated={fetchSites}
+                      />
+
                       <DeploysDialog siteId={site.id} siteName={site.name} />
 
                       <Button

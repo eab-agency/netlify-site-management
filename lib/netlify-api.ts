@@ -48,7 +48,7 @@ export async function fetchNetlify(
 
     const responseData = await response.json();
     // If it's a delete operation and we got a success response with code 0
-    if (options.method === 'DELETE' && responseData.code === 0) {
+    if (options.method === "DELETE" && responseData.code === 0) {
       return { success: true, message: responseData.message };
     }
 
@@ -160,27 +160,26 @@ export async function createSite(
   name: string,
   envVars: Record<string, string> = {}
 ) {
-  // Create deploy key first
-  const deployKey = await createDeployKey();
-
   const siteData = {
     name,
+    build_image: "noble",
     build_settings: {
       branch: "main",
       allowed_branches: [],
       skip_prs: true,
       installation_id: 12392279,
+      stop_builds: true,
     },
     repo: {
       branch: "main",
       cmd: "gatsby build",
-      // deploy_key_id: deployKey.id,
       dir: "/",
       private: false,
       provider: "github",
       repo: "eab-agency/iwc-default-proof",
       repo_id: 310384845,
       installation_id: 12392279,
+      stop_builds: true,
     },
   };
 

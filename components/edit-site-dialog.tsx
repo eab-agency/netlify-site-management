@@ -1,8 +1,6 @@
 "use client";
 
-import type React from "react";
-
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -15,9 +13,15 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Plus } from "lucide-react";
+import { Settings } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { Checkbox } from "@/components/ui/checkbox";
+
+interface EditSiteDialogProps {
+  siteId: string;
+  siteName: string;
+  onUpdated?: () => void;
+}
 
 interface EnvVars {
   GATSBY_YOUVISIT_INSTID: string;
@@ -25,39 +29,72 @@ interface EnvVars {
   GATSBY_SHOWCODE?: string;
 }
 
-export function CreateSiteButton() {
+export function EditSiteDialog({
+  siteId,
+  siteName,
+  onUpdated,
+}: EditSiteDialogProps) {
   const [open, setOpen] = useState(false);
-  const [siteName, setSiteName] = useState("");
   const [envVars, setEnvVars] = useState<EnvVars>({
     GATSBY_YOUVISIT_INSTID: "",
     GATSBY_LOCATIONS: "",
     GATSBY_SHOWCODE: "false",
   });
-  const [creating, setCreating] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [updating, setUpdating] = useState(false);
   const { toast } = useToast();
+
+  // Fetch current env vars when dialog opens
+  const fetchEnvVars = async () => {
+    if (!open) return;
+    setLoading(true);
+    try {
+      // Fetch full site details first
+      const siteResponse = await fetch(`/api/sites/${siteId}`);
+      if (!siteResponse.ok) {
+        const errorData = await siteResponse.json();
+        throw new Error(errorData.error || "Failed to fetch site details");
+      }
+      const siteData = await siteResponse.json();
+      console.log('Full site details:', siteData);
+
+      // Fetch environment variables
+      const response = await fetch(`/api/sites/${siteId}/env`);
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(
+          errorData.error || "Failed to fetch environment variables"
+        );
+      }
+      const data = await response.json();
+      setEnvVars({
+        GATSBY_YOUVISIT_INSTID: data.GATSBY_YOUVISIT_INSTID || "",
+        GATSBY_LOCATIONS: data.GATSBY_LOCATIONS || "",
+        GATSBY_SHOWCODE: data.GATSBY_SHOWCODE || "false",
+      });
+    } catch (err: any) {
+      toast({
+        title: "Error",
+        description: err.message || "Failed to fetch environment variables",
+        variant: "destructive",
+      });
+      // Close the dialog on error
+      setOpen(false);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Call fetchEnvVars when dialog opens
+  useEffect(() => {
+    if (open) {
+      fetchEnvVars();
+    }
+  }, [open]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    const sanitizedName = siteName.toLowerCase().trim();
-    if (!sanitizedName) {
-      toast({
-        title: "Error",
-        description: "Site name is required",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (!sanitizedName.match(/^[a-z0-9-]+$/)) {
-      toast({
-        title: "Invalid site name",
-        description:
-          "Site name can only contain lowercase letters, numbers, and hyphens",
-        variant: "destructive",
-      });
-      return;
-    }
+    setUpdating(true);
 
     if (!envVars.GATSBY_YOUVISIT_INSTID) {
       toast({
@@ -65,115 +102,82 @@ export function CreateSiteButton() {
         description: "GATSBY_YOUVISIT_INSTID is required",
         variant: "destructive",
       });
+      setUpdating(false);
       return;
     }
 
-    setCreating(true);
-
-    // Create clean env vars object without empty values
-    const envVarsObject: Record<string, string> = {
-      GATSBY_YOUVISIT_INSTID: envVars.GATSBY_YOUVISIT_INSTID,
-      ...(envVars.GATSBY_LOCATIONS
-        ? { GATSBY_LOCATIONS: envVars.GATSBY_LOCATIONS }
-        : {}),
-      ...(envVars.GATSBY_SHOWCODE
-        ? { GATSBY_SHOWCODE: envVars.GATSBY_SHOWCODE }
-        : {}),
-    };
-
     try {
-      const response = await fetch("/api/sites", {
-        method: "POST",
+      const response = await fetch(`/api/sites/${siteId}/env`, {
+        method: "PUT",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          name: siteName,
-          envVars: envVarsObject,
+          envVars: {
+            GATSBY_YOUVISIT_INSTID: envVars.GATSBY_YOUVISIT_INSTID,
+            ...(envVars.GATSBY_LOCATIONS
+              ? { GATSBY_LOCATIONS: envVars.GATSBY_LOCATIONS }
+              : {}),
+            ...(envVars.GATSBY_SHOWCODE
+              ? { GATSBY_SHOWCODE: envVars.GATSBY_SHOWCODE }
+              : {}),
+          },
         }),
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to create site");
+        throw new Error(
+          errorData.error || "Failed to update environment variables"
+        );
       }
 
-      const data = await response.json();
+      // Trigger a new deployment
+      await fetch(`/api/sites/${siteId}/deploys`, {
+        method: "POST",
+      });
 
-      setCreating(false);
       setOpen(false);
-
-      // Reset form
-      setSiteName("");
-      setEnvVars({
-        GATSBY_YOUVISIT_INSTID: "",
-        GATSBY_LOCATIONS: "",
-        GATSBY_SHOWCODE: "false",
-      });
-
       toast({
-        title: "Site created",
-        description: `${siteName} has been created successfully.`,
+        title: "Site updated",
+        description: `Environment variables for ${siteName} have been updated and a new deployment has been triggered.`,
       });
 
-      // Refresh the sites list
-      window.location.reload();
+      if (onUpdated) {
+        onUpdated();
+      }
     } catch (err: any) {
       toast({
-        title: "Create failed",
-        description: err.message || "An error occurred while creating the site",
+        title: "Update failed",
+        description: err.message || "An error occurred while updating the site",
         variant: "destructive",
       });
-      setCreating(false);
+    } finally {
+      setUpdating(false);
     }
-  };
-
-  const handleCancel = () => {
-    setOpen(false);
-    setSiteName("");
-    setEnvVars({
-      GATSBY_YOUVISIT_INSTID: "",
-      GATSBY_LOCATIONS: "",
-      GATSBY_SHOWCODE: "false",
-    });
   };
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button className="gap-1">
-          <Plus className="h-4 w-4" />
-          <span>Create Site</span>
+        <Button variant="outline" size="icon">
+          <Settings className="h-4 w-4" />
+          <span className="sr-only">Edit Site</span>
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-[500px]">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
-            <DialogTitle>Create New Site</DialogTitle>
+            <DialogTitle>Edit Site Environment Variables</DialogTitle>
             <DialogDescription>
-              Create a new Netlify site with environment variables.
+              Update environment variables for {siteName}
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label htmlFor="site-name">Site Name</Label>
-              <Input
-                id="site-name"
-                value={siteName}
-                onChange={(e) => setSiteName(e.target.value)}
-                placeholder="my-awesome-site"
-                required
-              />
-              <p className="text-xs text-muted-foreground">
-                Site names can only contain lowercase letters, numbers, and
-                hyphens
-              </p>
-            </div>
-
-            <div className="space-y-4">
-              <Label>Environment Variables</Label>
-
+          {loading ? (
+            <div className="py-6">Loading environment variables...</div>
+          ) : (
+            <div className="grid gap-4 py-4">
               <div className="space-y-4">
                 <div className="grid gap-2">
                   <Label
@@ -227,19 +231,19 @@ export function CreateSiteButton() {
                 </div>
               </div>
             </div>
-          </div>
+          )}
 
           <DialogFooter>
             <Button
               type="button"
               variant="outline"
-              onClick={handleCancel}
-              disabled={creating}
+              onClick={() => setOpen(false)}
+              disabled={updating}
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={creating}>
-              {creating ? "Creating..." : "Create Site"}
+            <Button type="submit" disabled={updating || loading}>
+              {updating ? "Updating..." : "Update & Deploy"}
             </Button>
           </DialogFooter>
         </form>
