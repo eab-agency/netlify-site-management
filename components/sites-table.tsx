@@ -59,19 +59,19 @@ export default function SitesTable() {
   const [sites, setSites] = useState<Site[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [sortField, setSortField] = useState<"name" | "last_deploy_time">(
-    "last_deploy_time"
-  );
+  const [sortField, setSortField] = useState<
+    "name" | "last_deploy_time" | "created_at"
+  >("last_deploy_time");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
-  const [currentPage, setCurrentPage] = useState(1);
   const [searchTerm, setSearchTerm] = useState("");
   const [redeployingSites, setRedeployingSites] = useState<string[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [page, setPage] = useState(1);
+  const sitesPerPage = 100; // Maximum allowed by Netlify API
   const { toast } = useToast();
 
-  const sitesPerPage = 20;
-
-  const fetchSites = async () => {
+  const fetchSites = async (resetPage = false) => {
     if (refreshing || isRateLimited("fetchSites")) return;
 
     setRefreshing(true);
@@ -79,36 +79,36 @@ export default function SitesTable() {
     setError(null);
 
     try {
-      const response = await fetch("/api/sites");
+      // Convert our sort field to Netlify's format
+      const sortBy =
+        sortField === "last_deploy_time" ? "updated_at" : sortField;
+
+      const params = new URLSearchParams({
+        page: resetPage ? "1" : page.toString(),
+        per_page: sitesPerPage.toString(),
+        sort_by: sortBy,
+        order_by: sortDirection,
+        ...(searchTerm ? { name: searchTerm } : {}),
+      });
+
+      const response = await fetch(`/api/sites?${params}`);
 
       if (!response.ok) {
-        // If we hit the rate limit, wait longer before allowing next request
         if (response.status === 429) {
-          rateLimiters.set("fetchSites", Date.now() + 60000); // Wait 1 minute
+          rateLimiters.set("fetchSites", Date.now() + 60000);
           throw new Error(
             "API rate limit reached. Please wait a moment before refreshing."
           );
         }
-
         const errorData = await response.json();
         throw new Error(errorData.error || "Failed to fetch sites");
       }
 
+      const linkHeader = response.headers.get("Link");
+      setHasMore(linkHeader?.includes('rel="next"') ?? false);
+
       const data = await response.json();
-
-      // Ensure data is an array
-      if (!Array.isArray(data)) {
-        console.warn("Expected array of sites, got:", data);
-
-        // If it's a single object with site properties, wrap it in an array
-        if (data && typeof data === "object" && data.id) {
-          setSites([data]);
-        } else {
-          setSites([]);
-        }
-      } else {
-        setSites(data);
-      }
+      setSites((prev) => (resetPage ? data : [...prev, ...data]));
     } catch (err: any) {
       setError(err.message || "An error occurred while fetching sites");
       console.error("Error fetching sites:", err);
@@ -119,44 +119,10 @@ export default function SitesTable() {
   };
 
   useEffect(() => {
-    fetchSites();
-  }, []);
+    fetchSites(true);
+  }, [sortField, sortDirection, searchTerm]);
 
-  // Sort sites
-  const sortedSites = [...sites].sort((a, b) => {
-    if (sortField === "name") {
-      return sortDirection === "asc"
-        ? a.name.localeCompare(b.name)
-        : b.name.localeCompare(a.name);
-    } else {
-      // For last_deploy_time, handle null values
-      if (!a.last_deploy_time && !b.last_deploy_time) return 0;
-      if (!a.last_deploy_time) return sortDirection === "asc" ? -1 : 1;
-      if (!b.last_deploy_time) return sortDirection === "asc" ? 1 : -1;
-
-      const dateA = new Date(a.last_deploy_time).getTime();
-      const dateB = new Date(b.last_deploy_time).getTime();
-      return sortDirection === "asc" ? dateA - dateB : dateB - dateA;
-    }
-  });
-
-  // Filter sites by search term and partner/proof requirement
-  const filteredSites = sortedSites.filter((site) => {
-    const siteName = site.name.toLowerCase();
-    const searchMatch = siteName.includes(searchTerm.toLowerCase());
-    const isPartnerOrProof = siteName.includes('partner') || siteName.includes('proof');
-    return searchMatch && isPartnerOrProof;
-  });
-
-  // Paginate sites
-  const paginatedSites = filteredSites.slice(
-    (currentPage - 1) * sitesPerPage,
-    currentPage * sitesPerPage
-  );
-
-  const totalPages = Math.ceil(filteredSites.length / sitesPerPage);
-
-  const handleSort = (field: "name" | "last_deploy_time") => {
+  const handleSort = (field: "name" | "last_deploy_time" | "created_at") => {
     if (sortField === field) {
       setSortDirection(sortDirection === "asc" ? "desc" : "asc");
     } else {
@@ -167,7 +133,7 @@ export default function SitesTable() {
 
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchTerm(e.target.value);
-    setCurrentPage(1); // Reset to first page on search
+    setPage(1);
   };
 
   const handleRedeploy = async (siteId: string) => {
@@ -215,12 +181,13 @@ export default function SitesTable() {
       'input[type="search"]'
     ) as HTMLInputElement;
     if (searchInput) {
-      searchInput.addEventListener("input", (e) => handleSearch(e as any));
+      const inputHandler = (e: Event) =>
+        handleSearch(e as unknown as React.ChangeEvent<HTMLInputElement>);
+      searchInput.addEventListener("input", inputHandler);
     }
-
     return () => {
       if (searchInput) {
-        searchInput.removeEventListener("input", (e) => handleSearch(e as any));
+        searchInput.removeEventListener("input", inputHandler);
       }
     };
   }, []);
@@ -250,6 +217,13 @@ export default function SitesTable() {
         </TableCell>
       </TableRow>
     ));
+  };
+
+  const loadMoreSites = async () => {
+    if (!hasMore || loading) return;
+
+    setPage((prev) => prev + 1);
+    await fetchSites();
   };
 
   if (loading && !refreshing) {
@@ -285,7 +259,11 @@ export default function SitesTable() {
         <AlertDescription>
           {error}
           <div className="mt-2">
-            <Button onClick={fetchSites} variant="outline" size="sm">
+            <Button
+              onClick={() => fetchSites(true)}
+              variant="outline"
+              size="sm"
+            >
               Try Again
             </Button>
           </div>
@@ -300,7 +278,7 @@ export default function SitesTable() {
         <Button
           variant="outline"
           size="sm"
-          onClick={fetchSites}
+          onClick={() => fetchSites(true)}
           disabled={refreshing}
           className="gap-2"
         >
@@ -352,8 +330,8 @@ export default function SitesTable() {
           </TableHeader>
           <TableBody>
             {refreshing ? (
-              renderSkeletonRows(paginatedSites.length || 5)
-            ) : paginatedSites.length === 0 ? (
+              renderSkeletonRows(sites.length || 5)
+            ) : sites.length === 0 ? (
               <TableRow>
                 <TableCell
                   colSpan={5}
@@ -363,7 +341,7 @@ export default function SitesTable() {
                 </TableCell>
               </TableRow>
             ) : (
-              paginatedSites.map((site) => (
+              sites.map((site) => (
                 <TableRow key={site.id}>
                   <TableCell className="font-medium">
                     <a
@@ -472,56 +450,38 @@ export default function SitesTable() {
         </Table>
       </div>
 
-      {/* Pagination */}
-      <div className="flex items-center justify-between">
-        <div className="text-sm text-muted-foreground">
-          {refreshing ? (
-            <Skeleton className="h-4 w-[200px]" />
-          ) : (
-            <>
-              Showing{" "}
-              {paginatedSites.length > 0
-                ? (currentPage - 1) * sitesPerPage + 1
-                : 0}{" "}
-              to {Math.min(currentPage * sitesPerPage, filteredSites.length)} of{" "}
-              {filteredSites.length} sites
-            </>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          {refreshing ? (
-            <>
-              <Skeleton className="h-8 w-20" />
-              <Skeleton className="h-4 w-24" />
-              <Skeleton className="h-8 w-20" />
-            </>
-          ) : (
-            <>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-                disabled={currentPage === 1}
-              >
-                Previous
-              </Button>
-              <div className="text-sm">
-                Page {currentPage} of {totalPages || 1}
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() =>
-                  setCurrentPage((prev) => Math.min(prev + 1, totalPages))
-                }
-                disabled={currentPage === totalPages || totalPages === 0}
-              >
-                Next
-              </Button>
-            </>
-          )}
-        </div>
+      {/* Load More button */}
+      <div className="flex justify-center">
+        {hasMore && (
+          <Button
+            variant="outline"
+            onClick={loadMoreSites}
+            disabled={loading || refreshing}
+          >
+            {loading || refreshing ? (
+              <>
+                <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                Loading...
+              </>
+            ) : (
+              "Load More Sites"
+            )}
+          </Button>
+        )}
       </div>
     </div>
   );
+}
+function inputHandler(this: HTMLInputElement, ev: Event) {
+  const event = ev as unknown as React.ChangeEvent<HTMLInputElement>;
+  const searchTerm = event.target.value;
+  const searchInput = document.querySelector(
+    'input[type="search"]'
+  ) as HTMLInputElement;
+
+  if (searchInput) {
+    searchInput.value = searchTerm;
+    const changeEvent = new Event("input", { bubbles: true });
+    searchInput.dispatchEvent(changeEvent);
+  }
 }

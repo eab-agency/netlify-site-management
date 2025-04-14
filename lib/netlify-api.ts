@@ -52,7 +52,11 @@ export async function fetchNetlify(
       return { success: true, message: responseData.message };
     }
 
-    return responseData;
+    // Return both the response data and headers
+    return {
+      data: responseData,
+      headers: Object.fromEntries(response.headers.entries()),
+    };
   } catch (error: any) {
     // Handle different types of network errors
     if (error instanceof TypeError) {
@@ -93,7 +97,9 @@ export async function getSitesWithLastDeploy() {
   // Ensure sites is an array
   const sites = Array.isArray(sitesResponse)
     ? sitesResponse
-    : sitesResponse && typeof sitesResponse === "object" && sitesResponse.id
+    : sitesResponse &&
+      typeof sitesResponse === "object" &&
+      "id" in sitesResponse
     ? [sitesResponse]
     : [];
 
@@ -118,6 +124,8 @@ export async function getSitesWithLastDeploy() {
           ? deploysResponse
           : deploysResponse &&
             typeof deploysResponse === "object" &&
+            typeof deploysResponse === "object" &&
+            "id" in deploysResponse &&
             deploysResponse.id
           ? [deploysResponse]
           : [];
@@ -184,10 +192,18 @@ export async function createSite(
   };
 
   // Create the site
-  const site = await fetchNetlify("/sites", {
+  const siteResponse = await fetchNetlify("/sites", {
     method: "POST",
     body: JSON.stringify(siteData),
   });
+
+  if (!siteResponse || !("data" in siteResponse) || !siteResponse.data.id) {
+    throw new Error(
+      "Failed to create site or site ID is missing in the response"
+    );
+  }
+
+  const site = siteResponse.data;
 
   // If we have environment variables, set them
   if (Object.keys(envVars).length > 0) {
@@ -260,7 +276,10 @@ export async function getActiveBuilds() {
     // Ensure sites is an array
     const sites = Array.isArray(sitesResponse)
       ? sitesResponse
-      : sitesResponse && typeof sitesResponse === "object" && sitesResponse.id
+      : sitesResponse &&
+        typeof sitesResponse === "object" &&
+        "data" in sitesResponse &&
+        sitesResponse.data.id
       ? [sitesResponse]
       : [];
 
@@ -285,7 +304,7 @@ export async function getActiveBuilds() {
           deploysArray = response;
         } else if (response && typeof response === "object") {
           // If it's a single object with an id, wrap it in an array
-          if (response.id) {
+          if (response && typeof response === "object" && "id" in response) {
             deploysArray = [response];
           } else {
             console.log(
