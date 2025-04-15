@@ -56,7 +56,6 @@ export function EditSiteDialog({
         throw new Error(errorData.error || "Failed to fetch site details");
       }
       const siteData = await siteResponse.json();
-      console.log('Full site details:', siteData);
 
       // Fetch environment variables
       const response = await fetch(`/api/sites/${siteId}/env`);

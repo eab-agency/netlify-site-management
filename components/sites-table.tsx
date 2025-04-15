@@ -115,7 +115,6 @@ export default function SitesTable() {
       setHasMore(linkHeader?.includes('rel="next"') ?? false);
 
       const data = await response.json();
-      console.log("🚀 ~ fetchSites ~ data:", data);
       setSites((prev) => (resetPage ? data : [...prev, ...data]));
     } catch (err: any) {
       setError(err.message || "An error occurred while fetching sites");

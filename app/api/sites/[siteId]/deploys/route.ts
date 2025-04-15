@@ -9,9 +9,21 @@ export async function GET(
     const { siteId } = await params;
     const { searchParams } = new URL(request.url);
     const page = Number.parseInt(searchParams.get("page") || "1");
-    const perPage = Number.parseInt(searchParams.get("perPage") || "5");
+    const per_page = Number.parseInt(searchParams.get("per_page") || "5");
 
-    const deploys = await getSiteDeploys(siteId, page, perPage);
+    // Add other optional parameters from Netlify API
+    const production = searchParams.get("production");
+    const state = searchParams.get("state");
+    const branch = searchParams.get("branch");
+
+    const options = {
+      ...(production !== null && { production: production === "true" }),
+      ...(state && { state }),
+      ...(branch && { branch }),
+    };
+
+    const deploys = await getSiteDeploys(siteId, page, per_page, options);
+
     return NextResponse.json(deploys);
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });

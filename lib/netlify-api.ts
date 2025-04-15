@@ -98,7 +98,9 @@ export async function getSitesWithLastDeploy() {
   // Ensure sites is an array
   const sites = Array.isArray(sitesResponse)
     ? sitesResponse
-    : sitesResponse && typeof sitesResponse === "object" && "id" in sitesResponse
+    : sitesResponse &&
+      typeof sitesResponse === "object" &&
+      "id" in sitesResponse
     ? [sitesResponse]
     : [];
 
@@ -245,10 +247,31 @@ export async function deleteSite(siteId: string) {
 }
 
 // Get deploys for a site
-export async function getSiteDeploys(siteId: string, page = 1, perPage = 5) {
-  return fetchNetlify(
-    `/sites/${siteId}/deploys?page=${page}&per_page=${perPage}`
-  );
+export async function getSiteDeploys(
+  siteId: string,
+  page = 1,
+  per_page = 5,
+  options: {
+    production?: boolean;
+    state?: string;
+    branch?: string;
+  } = {}
+) {
+  const params = new URLSearchParams({
+    page: page.toString(),
+    per_page: per_page.toString(),
+    ...(options.production !== undefined
+      ? { production: options.production.toString() }
+      : {}),
+    ...(options.state ? { state: options.state } : {}),
+    ...(options.branch ? { branch: options.branch } : {}),
+  });
+
+  const endpoint = `/sites/${siteId}/deploys?${params}`;
+
+  const response = await fetchNetlify(endpoint);
+
+  return response.data;
 }
 
 // Create a new deploy (redeploy)

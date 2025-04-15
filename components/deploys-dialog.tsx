@@ -54,7 +54,7 @@ export function DeploysDialog({ siteId, siteName }: DeploysDialogProps) {
     setError(null);
 
     try {
-      const response = await fetch(`/api/sites/${siteId}/deploys?perPage=5`);
+      const response = await fetch(`/api/sites/${siteId}/deploys?per_page=5`);
       const data = await response.json();
 
       if (!response.ok) {
