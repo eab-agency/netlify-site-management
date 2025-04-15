@@ -23,6 +23,13 @@ import { formatDistanceToNow } from "date-fns";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
 import { isRateLimited } from "@/lib/utils";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface Deploy {
   id: string;
@@ -108,6 +115,7 @@ export default function SitesTable() {
       setHasMore(linkHeader?.includes('rel="next"') ?? false);
 
       const data = await response.json();
+      console.log("🚀 ~ fetchSites ~ data:", data);
       setSites((prev) => (resetPage ? data : [...prev, ...data]));
     } catch (err: any) {
       setError(err.message || "An error occurred while fetching sites");
@@ -314,7 +322,56 @@ export default function SitesTable() {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end mb-4">
+      <div className="flex justify-between items-center mb-4">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm" className="gap-2">
+              Sort by:{" "}
+              {sortField === "last_deploy_time"
+                ? "Last Deploy"
+                : sortField === "created_at"
+                ? "Created Date"
+                : "Name"}
+              {sortDirection === "asc" ? (
+                <ChevronUp className="h-4 w-4" />
+              ) : (
+                <ChevronDown className="h-4 w-4" />
+              )}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            <DropdownMenuGroup>
+              <DropdownMenuItem onClick={() => handleSort("name")}>
+                Name
+                {sortField === "name" &&
+                  (sortDirection === "asc" ? (
+                    <ChevronUp className="ml-2 h-4 w-4" />
+                  ) : (
+                    <ChevronDown className="ml-2 h-4 w-4" />
+                  ))}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleSort("last_deploy_time")}>
+                Last Deploy
+                {sortField === "last_deploy_time" &&
+                  (sortDirection === "asc" ? (
+                    <ChevronUp className="ml-2 h-4 w-4" />
+                  ) : (
+                    <ChevronDown className="ml-2 h-4 w-4" />
+                  ))}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleSort("created_at")}>
+                Created Date
+                {sortField === "created_at" &&
+                  (sortDirection === "asc" ? (
+                    <ChevronUp className="ml-2 h-4 w-4" />
+                  ) : (
+                    <ChevronDown className="ml-2 h-4 w-4" />
+                  ))}
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
         <Button
           variant="outline"
           size="sm"
