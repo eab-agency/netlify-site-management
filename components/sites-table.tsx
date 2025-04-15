@@ -127,7 +127,8 @@ export default function SitesTable() {
       setSortDirection(sortDirection === "asc" ? "desc" : "asc");
     } else {
       setSortField(field);
-      setSortDirection("asc");
+      // Set initial direction to desc for last_deploy_time, asc for other fields
+      setSortDirection(field === "last_deploy_time" ? "desc" : "asc");
     }
   };
 
@@ -225,6 +226,45 @@ export default function SitesTable() {
     setPage((prev) => prev + 1);
     await fetchSites();
   };
+
+  // Sort and filter sites before rendering
+  const sortAndFilterSites = () => {
+    // Deduplicate sites by ID first
+    const uniqueSites = [
+      ...new Map(sites.map((site) => [site.id, site])).values(),
+    ];
+
+    // Sort sites
+    const sortedSites = [...uniqueSites].sort((a, b) => {
+      if (sortField === "name") {
+        return sortDirection === "asc"
+          ? a.name.localeCompare(b.name)
+          : b.name.localeCompare(a.name);
+      } else {
+        // For last_deploy_time, handle null values
+        if (!a.last_deploy_time && !b.last_deploy_time) return 0;
+        if (!a.last_deploy_time) return sortDirection === "asc" ? -1 : 1;
+        if (!b.last_deploy_time) return sortDirection === "asc" ? 1 : -1;
+
+        const dateA = new Date(a.last_deploy_time).getTime();
+        const dateB = new Date(b.last_deploy_time).getTime();
+        return sortDirection === "asc" ? dateA - dateB : dateB - dateA;
+      }
+    });
+
+    // Filter sites by search term and partner/proof names
+    return sortedSites.filter((site) => {
+      const siteName = site.name.toLowerCase();
+      const searchMatch = searchTerm
+        ? siteName.includes(searchTerm.toLowerCase())
+        : true;
+      const partnerProofMatch =
+        siteName.includes("partner") || siteName.includes("proof");
+      return searchMatch && partnerProofMatch;
+    });
+  };
+
+  const displaySites = sortAndFilterSites();
 
   if (loading && !refreshing) {
     return (
@@ -341,7 +381,7 @@ export default function SitesTable() {
                 </TableCell>
               </TableRow>
             ) : (
-              sites.map((site) => (
+              displaySites.map((site) => (
                 <TableRow key={site.id}>
                   <TableCell className="font-medium">
                     <a
@@ -382,11 +422,6 @@ export default function SitesTable() {
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-col gap-1">
-                      {/* <Badge
-                        variant={site.state === "ready" ? "success" : "default"}
-                      >
-                        {site.state === "ready" ? "Ready" : site.state}
-                      </Badge> */}
                       {site.lastDeploy && (
                         <Badge
                           variant={

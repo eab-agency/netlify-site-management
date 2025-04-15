@@ -55,14 +55,14 @@ export function DeploysDialog({ siteId, siteName }: DeploysDialogProps) {
 
     try {
       const response = await fetch(`/api/sites/${siteId}/deploys?perPage=5`);
+      const data = await response.json();
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to fetch deploys");
+        throw new Error(data.error || "Failed to fetch deploys");
       }
 
-      const data = await response.json();
-      setDeploys(data);
+      // Ensure deploys is always an array
+      setDeploys(Array.isArray(data) ? data : []);
     } catch (err: any) {
       setError(err.message || "An error occurred while fetching deploys");
       console.error("Error fetching deploys:", err);

@@ -1,12 +1,12 @@
-"use client"
+"use client";
 
-import Link from "next/link"
-import { usePathname } from "next/navigation"
-import { cn } from "@/lib/utils"
-import { Server, Activity } from "lucide-react"
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { cn } from "@/lib/utils";
+import { Server, Activity } from "lucide-react";
 
 export default function Navbar() {
-  const pathname = usePathname()
+  const pathname = usePathname();
 
   return (
     <header className="bg-background border-b">
@@ -21,13 +21,13 @@ export default function Navbar() {
               href="/"
               className={cn(
                 "text-sm font-medium transition-colors hover:text-primary flex items-center gap-1",
-                pathname === "/" ? "text-primary" : "text-muted-foreground",
+                pathname === "/" ? "text-primary" : "text-muted-foreground"
               )}
             >
               <Server className="h-4 w-4" />
               <span>Sites</span>
             </Link>
-            <Link
+            {/* <Link
               href="/builds"
               className={cn(
                 "text-sm font-medium transition-colors hover:text-primary flex items-center gap-1",
@@ -36,10 +36,10 @@ export default function Navbar() {
             >
               <Activity className="h-4 w-4" />
               <span>Active Builds</span>
-            </Link>
+            </Link> */}
           </nav>
         </div>
       </div>
     </header>
-  )
+  );
 }
