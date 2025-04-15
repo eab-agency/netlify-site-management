@@ -92,14 +92,13 @@ export async function fetchNetlify(
 
 // Get all sites with their last deploy
 export async function getSitesWithLastDeploy() {
-  const sitesResponse = await fetchNetlify("/sites");
+  const response = await fetchNetlify("/sites");
+  const sitesResponse = response.data;
 
   // Ensure sites is an array
   const sites = Array.isArray(sitesResponse)
     ? sitesResponse
-    : sitesResponse &&
-      typeof sitesResponse === "object" &&
-      "id" in sitesResponse
+    : sitesResponse && typeof sitesResponse === "object" && "id" in sitesResponse
     ? [sitesResponse]
     : [];
 
@@ -115,18 +114,17 @@ export async function getSitesWithLastDeploy() {
   const sitesWithLastDeploy = await Promise.all(
     sites.map(async (site: any) => {
       try {
-        const deploysResponse = await fetchNetlify(
+        const response = await fetchNetlify(
           `/sites/${site.id}/deploys?per_page=1`
         );
+        const deploysResponse = response.data;
 
         // Ensure deploys is an array
         const deploys = Array.isArray(deploysResponse)
           ? deploysResponse
           : deploysResponse &&
             typeof deploysResponse === "object" &&
-            typeof deploysResponse === "object" &&
-            "id" in deploysResponse &&
-            deploysResponse.id
+            "id" in deploysResponse
           ? [deploysResponse]
           : [];
 
