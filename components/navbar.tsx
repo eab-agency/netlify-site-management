@@ -14,7 +14,7 @@ export default function Navbar() {
         <div className="flex h-16 items-center justify-between">
           <div className="flex items-center gap-2">
             <Server className="h-6 w-6" />
-            <span className="text-lg font-bold">Netlify Manager</span>
+            <span className="text-lg font-bold">IWC Sites Manager</span>
           </div>
           <nav className="flex items-center gap-4 md:gap-6">
             <Link

@@ -2,7 +2,7 @@
 
 import type React from "react";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   Table,
   TableBody,
@@ -22,7 +22,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { formatDistanceToNow } from "date-fns";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
-import { isRateLimited } from "@/lib/utils";
+import { isRateLimited, debounce } from "@/lib/utils";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -30,6 +30,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Cache } from "@/lib/cache";
 
 interface Deploy {
   id: string;
@@ -61,6 +62,7 @@ interface Site {
 }
 
 const rateLimiters = new Map<string, number>();
+const SITES_CACHE_KEY = "sites";
 
 export default function SitesTable() {
   const [sites, setSites] = useState<Site[]>([]);
@@ -78,6 +80,11 @@ export default function SitesTable() {
   const sitesPerPage = 100; // Maximum allowed by Netlify API
   const { toast } = useToast();
 
+  const debouncedFetchSites = useCallback(
+    debounce((resetPage = false) => fetchSites(resetPage), 500),
+    []
+  );
+
   const fetchSites = async (resetPage = false) => {
     if (refreshing || isRateLimited("fetchSites")) return;
 
@@ -86,6 +93,17 @@ export default function SitesTable() {
     setError(null);
 
     try {
+      // Check cache first
+      const cacheKey = `${SITES_CACHE_KEY}-${sortField}-${sortDirection}-${searchTerm}-${page}`;
+      const cachedData = Cache.get(cacheKey);
+
+      if (cachedData) {
+        setSites(resetPage ? cachedData : [...sites, ...cachedData]);
+        setLoading(false);
+        setRefreshing(false);
+        return;
+      }
+
       // Convert our sort field to Netlify's format
       const sortBy =
         sortField === "last_deploy_time" ? "updated_at" : sortField;
@@ -115,6 +133,10 @@ export default function SitesTable() {
       setHasMore(linkHeader?.includes('rel="next"') ?? false);
 
       const data = await response.json();
+
+      // Cache the results
+      Cache.set(cacheKey, data);
+
       setSites((prev) => (resetPage ? data : [...prev, ...data]));
     } catch (err: any) {
       setError(err.message || "An error occurred while fetching sites");
@@ -126,7 +148,7 @@ export default function SitesTable() {
   };
 
   useEffect(() => {
-    fetchSites(true);
+    debouncedFetchSites(true);
   }, [sortField, sortDirection, searchTerm]);
 
   const handleSort = (field: "name" | "last_deploy_time" | "created_at") => {

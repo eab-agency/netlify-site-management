@@ -10,9 +10,8 @@ import { BuildsProvider } from "@/lib/builds-context";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Netlify Site Manager",
-  description: "Manage your Netlify sites with ease",
-  generator: "v0.dev",
+  title: "IWC Sites Manager",
+  description: "Manage your IWC sites with ease",
 };
 
 export default function RootLayout({

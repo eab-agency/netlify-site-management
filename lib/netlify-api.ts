@@ -1,4 +1,5 @@
 // Netlify API utilities
+import { Cache } from "./cache";
 
 // Base URL for Netlify API
 const NETLIFY_API_URL = "https://api.netlify.com/api/v1";

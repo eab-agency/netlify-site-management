@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Table,
   TableBody,
@@ -17,19 +17,34 @@ import { AlertCircle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useBuilds } from "@/lib/builds-context";
 import Link from "next/link";
+import { Cache } from "@/lib/cache";
+import { isRateLimited } from "@/lib/utils";
+
+const BUILDS_CACHE_KEY = "active-builds";
+const REFRESH_INTERVAL = 10000; // 10 seconds
 
 export default function ActiveBuildsTable() {
   const { builds, setBuilds, isLoaded, setIsLoaded } = useBuilds();
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [autoRefresh, setAutoRefresh] = useState(true);
 
   const fetchBuilds = async () => {
-    if (refreshing) return;
+    if (refreshing || isRateLimited("fetchBuilds", 2000)) return; // 2 second rate limit
 
     setRefreshing(true);
     setError(null);
 
     try {
+      // Check cache first
+      const cachedData = Cache.get(BUILDS_CACHE_KEY);
+      if (cachedData) {
+        setBuilds(cachedData);
+        setIsLoaded(true);
+        setRefreshing(false);
+        return;
+      }
+
       const response = await fetch("/api/builds");
 
       if (!response.ok) {
@@ -43,6 +58,8 @@ export default function ActiveBuildsTable() {
         console.warn("Expected array of builds, got:", data);
         setBuilds([]);
       } else {
+        // Cache the results with a shorter TTL since builds change frequently
+        Cache.set(BUILDS_CACHE_KEY, data, 30000); // 30 second cache
         setBuilds(data);
       }
       setIsLoaded(true);
@@ -54,10 +71,27 @@ export default function ActiveBuildsTable() {
     }
   };
 
-  // Only fetch on first render if not already loaded
-  if (!isLoaded && !refreshing && !error) {
-    fetchBuilds();
-  }
+  // Initial fetch
+  useEffect(() => {
+    if (!isLoaded && !refreshing && !error) {
+      fetchBuilds();
+    }
+  }, [isLoaded, refreshing, error]);
+
+  // Auto-refresh every REFRESH_INTERVAL
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+
+    if (autoRefresh) {
+      interval = setInterval(fetchBuilds, REFRESH_INTERVAL);
+    }
+
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+    };
+  }, [autoRefresh]);
 
   // Render skeleton loaders
   const renderSkeletonRows = (count: number) => {
